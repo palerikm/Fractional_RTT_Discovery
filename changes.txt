@@ -1,1 +1,42 @@
-ff
+- Renamed draft to "Measurement of Fractional Loss and RTT using STUN"
+This better reflects what the draft actually describes.
+Rewrote Abstract to reflect those changes
+
+- Renamed attribute PATH-CHARACTERISTIC to
+  TRANSACTION_TRANSMIT_COUNTER
+Again to better reflect what the attribute actually does. Also
+  adjusted the field names in the attribute.
+
+- Renamed section "Path characteristics determination mechanism" ->
+  "Measuring Fractional Loss and RTT"
+
+- Down played how ICE should use it. Only hints that this is usefull
+  information for ICE like functinality.
+
+- Fix re-transmit vs transmits (off by one problem)
+
+- Added wording regarding passive listening in the security section
+(Kathleens comment)
+
+- Removed from security section
+"Unauthenticated STUN message MUST NOT include
+ the TRANSACTION_TRANSMIT_COUNTER attribute in order to prevent
+ on-path attacker from influencing decision-making."
+An on-path attacker coul do much worse thing to the (s)RTP packets
+onece media is flowing. 
+(Also commented by Stpephen)
+
+- Fixed examples in section 3.3 (Alissas comments)
+
+- Added " However if this
+        information is collected as network metrics from several
+        clients over a longer time period it will be easier to detect
+        a pattern."
+THis atribute infrmation is useful from a mtrics and analytics
+        perspective to detect potential network problems. 
+This in addition to adding text throughout that the loss direction
+        shoudld be treated as a hint is aimed at resolving SHures
+        DISCUSS. 
+
+TODO: Writa bout intention to crude and simple.
+

@@ -1,0 +1,511 @@
+<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd">
+<?rfc toc="yes"?>
+<?rfc tocompact="yes"?>
+<?rfc tocdepth="3"?>
+<?rfc tocindent="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc sortrefs="yes"?>
+<?rfc comments="yes"?>
+<?rfc inline="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<rfc category="std" docName="draft-ietf-tram-stun-path-data-03"
+     ipr="trust200902">
+  <front>
+    <title abbrev="MFLR">Measurement of Fractional Loss and RTT Using STUN</title>
+   
+   <author fullname="Paal-Erik Martinsen" initials="P.E" surname="Martinsen">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+      <address>
+        <postal>
+          <street>Philip Pedersens vei 22</street>
+          <city>Lysaker</city>
+          <region>Akershus</region>
+          <code>1325</code>
+          <country>Norway</country>
+        </postal>
+        <email>palmarti@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Tirumaleswar Reddy" initials="T." surname="Reddy">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+      <address>
+        <postal>
+          <street>Cessna Business Park, Varthur Hobli</street>
+          <street>Sarjapur Marathalli Outer Ring Road</street>
+          <city>Bangalore</city>
+          <region>Karnataka</region>
+          <code>560103</code>
+          <country>India</country>
+        </postal>
+        <email>tireddy@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Dan Wing" initials="D." surname="Wing">
+      <organization abbrev="Cisco">Cisco Systems, Inc.</organization>
+      <address>
+        <postal>
+          <street>170 West Tasman Drive</street>
+          <city>San Jose</city>
+          <region>California</region>
+          <code>95134</code>
+          <country>USA</country>
+        </postal>
+        <email>dwing@cisco.com</email>
+      </address>
+    </author>
+
+    <author fullname="Varun Singh" initials="V." surname="Singh">
+      <organization abbrev="callstats.io">Nemu Dialogue System
+      Oy</organization>
+      <address>
+        <postal>
+          <street>Itaemerenkatu 5</street>
+          <city>Helsinki</city>
+          <code>00150</code>
+          <country>Finland</country>
+        </postal>
+        <email>varun@callstats.io</email>
+      </address>
+    </author>
+
+    <date />
+
+    <workgroup>TRAM</workgroup>
+
+    <abstract>
+      <t>
+        A host with multiple interfaces needs to choose the best
+        interface for communication. Oftentimes, this decision is
+        based on a static configuration and does not consider the path
+        characteristics, which may affect the user experience.
+      </t>
+
+      <t>
+        This document describes a mechanism for an endpoint to measure
+        fractional loss and RTT using Session Traversal Utilities for
+        NAT (STUN) messages. For endpoints using Interactive
+        Connectivity Establishment (ICE) this can, for example, be used
+        to determine the network path best suited to choose as the
+        active one.
+      </t>
+    </abstract>
+  </front>
+
+  <middle>
+    <section anchor="introduction" title="Introduction">
+      <t>
+        <xref target="RFC5245">ICE</xref> is a mechanism commonly used
+        in VoIP applications to traverse NATs. It uses a static
+        prioritization formula to order the candidate pairs and
+        perform connectivity checks, in which the most preferred
+        address pairs are tested first and when a sufficiently good
+        pair is discovered, that pair is used for communications and
+        further connectivity tests are stopped. This approach works
+        well for an endpoint with a single interface, but is too
+        simplistic for endpoints with multiple interfaces, wherein a
+        candidate pair with a lower priority might, in fact, have better
+        path characteristics (e.g., round-trip time, loss, etc.). The
+        ICE connectivity checks can assist in measuring the path
+        characteristics, but as currently defined, the STUN responses
+        to re-transmitted requests are indistinguishable from each
+        other. If packet loss occurs it is currently not possible to
+        reliably measure RTT.
+      </t>
+
+      <t>
+        This draft extends STUN <xref target="RFC5389"></xref> to
+        distinguish STUN responses to re-transmitted requests and this
+        assists the client in determining the path characteristics
+        like round-trip time (RTT) and fractional packet loss in each
+        direction between endpoints. These metrics can then be used by
+        the controlling agent to influence the ICE candidate pair
+        selection. How ICE actually will use this information to
+        improve the active candidate pair selection is outside the
+        scope of this document. When the mechanism described in this
+        document is in use in conjunction with ICE too few packets are
+        sent to get good measurements for packet loss.
+      </t>
+
+      <t>
+        The TRANSACTION_TRANSMIT_COUNTER attribute introduced in
+        section <xref target="new_attribute"/> can be used in ICE
+        connectivity checks (STUN Binding request and response).  When
+        multiple TURN servers are discovered then this new attribute
+        can also be used with Allocate request to determine the
+        priority amongst the relayed candidates.
+      </t>
+  
+    </section>
+
+    <section anchor="notation" title="Notational Conventions">
+      <t>
+        The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+        NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and
+        "OPTIONAL" in this document are to be interpreted as described
+        in <xref target="RFC2119"></xref>.
+      </t>
+      <t>
+        This specification uses terminology defined in <xref
+        target="RFC5245">ICE</xref> and STUN <xref
+        target="RFC5389"></xref>.
+      </t>
+    </section>
+
+    <section anchor="alg_over"
+             title="Measuring Fractional Loss and RTT">
+      <t>
+        When multiple paths are available for communication, the
+        endpoint sends ICE connectivity checks across each path
+        (candidate pair) and perhaps chooses the path with the lowest
+        round trip time. Choosing the path with the lowest round trip
+        time is a reasonable approach, but re-transmits can cause an
+        otherwise good path to appear flawed. However, STUN's
+        retransmission algorithm <xref target="RFC5389"></xref> cannot
+        determine the round-trip time (RTT) if a STUN request packet
+        is re-transmitted, because each request and retransmission
+        packet is identical. Further, several STUN requests may be
+        sent before the connectivity between candidate pairs are
+        ascertained (see Section 16 of <xref
+        target="RFC5245"></xref>). To resolve the issue of identical
+        request and response packets in a STUN transaction, this
+        document changes the retransmission behavior for idempotent
+        packets. In addition to determining RTT, it is also possible
+        to get a hint regarding which path direction caused packet
+        loss. This is achieved by defining a new STUN attribute and
+        requires compliant STUN (TURN, ICE) endpoints to count request
+        packets.
+      </t>
+      <t>
+        This document defines a new comprehension-optional STUN
+        attribute
+        TRANSACTION_TRANSMIT_COUNTER. TRANSACTION_TRANSMIT_COUNTER
+        will have a STUN Type TBD-CA.  This type is in the
+        comprehension-optional range, which means that STUN agents can
+        safely ignore the attribute. If ICE is in use it will just
+        fallback to normal procedures.  
+      </t>
+      <t>
+        If a client wishes to measure RTT, it inserts the
+        TRANSACTION_TRANSMIT_COUNTER attribute in a STUN request. In
+        the TRANSACTION_TRANSMIT_COUNTER attribute client sends the
+        number of times the STUN request is retransmitted with the
+        same Transaction ID. The server would echo back the
+        retransmission count in the response so that client can
+        distinguish STUN responses from the re-transmitted
+        requests. Hence, the endpoint can use the STUN requests and
+        responses to determine the round-trip time (RTT). The server
+        may also convey the number of responses it has sent for the
+        STUN request to the client. Further, this information enables
+        the client to get a hint regarding what direction the packet
+        loss occurred. In some cases, it is impossible to distinguish
+        between packet reordering and packet loss. However if this
+        information is collected as network metrics from several
+        clients over a longer time period it will be easier to detect
+        a pattern.
+      </t>
+
+      <section anchor="new_attribute" 
+               title="TRANSACTION_TRANSMIT_COUNTER attribute">
+        <t>
+          The TRANSACTION_TRANSMIT_COUNTER attribute in a STUN request
+          takes a 32-bit value. This document updates one of the STUN
+          message structuring rules explained in Section 6 of <xref
+          target="RFC5389"></xref> wherein resends of the same request
+          reuse the same transaction ID and are bit-wise identical to
+          the previous request. For idempotent packets, the Req and
+          Resp fields in the TRANSACTION_TRANSMIT_COUNTER attribute
+          will be incremented by 1 by the client or server for every
+          transmission with the same transaction id. Any
+          re-transmitted STUN request MUST be bit-wise identical to
+          the previous request except for the values in the
+          TRANSACTION_TRANSMIT_COUNTER attribute.
+        </t>
+        <t>
+          The format of the value in TRANSACTION_TRANSMIT_COUNTER
+          attribute in the request is:
+        </t>
+        <t>
+          <figure anchor="Figure1"
+                  title=" TRANSACTION_TRANSMIT_COUNTER attribute in request">
+            <artwork align="left"><![CDATA[
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |        Reserved (Padding)     |    Req        |     Resp      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    
+             ]]></artwork>
+          </figure>
+        </t>
+        <t>
+          The fields is described below:
+        </t>
+        <t>
+          <list style="hanging">
+            <t hangText="Req:">Number of times request is
+            transmitted with the same transaction ID to the
+            server.
+            </t>
+            <t hangText="Resp:">Number of times a response with the same
+            transaction ID is sent from the server. MUST be set to
+            zero in requests and ignored by the receiver.
+            </t>
+          </list>
+        </t>
+        <t>
+          The padding is necessary to hit the 32-bit boundary needed
+          for STUN attributes. The padding bits are ignored, and may
+          be any value.
+        </t>
+      </section>
+        
+      <section title="Usage in Requests">
+        <t>
+          When sending a STUN request, the
+          TRANSACTION_TRANSMIT_COUNTER Attribute allows a client to
+          indicate to the server that it wants to measure RTT and get
+          a hint of the direction of any packet loss. 
+        </t>
+        <t>
+          The client MUST populate the Req value in the
+          TRANSACTION_TRANSMIT_COUNTER. This value MUST reflect the
+          number of requests that have been transmitted to the
+          server. Initial value for the first request sent is
+          therefore 1.
+        </t>
+        <t>
+          The Resp MUST be set to zero in the request.
+        </t>
+      </section>
+
+      <section title="Usage in Responses">
+        <t>
+          When a server receives a STUN request that includes a
+          TRANSACTION_TRANSMIT_COUNTER attribute, it processes the
+          request as per the <xref target="RFC5389">STUN
+          protocol</xref> plus the specific rules mentioned here. The
+          server checks the following:
+        </t>
+
+        <t><list style="symbols">
+            <t>
+              If the TRANSACTION_TRANSMIT_COUNTER attribute is not
+              recognized, ignore the attribute because its type
+              indicates that it is comprehension- optional. This
+              should be the existing behavior as explained in section
+              3.1 of <xref target="RFC5389"></xref>.
+            </t>
+            <t>
+              The server that supports TRANSACTION_TRANSMIT_COUNTER
+              attribute MUST echo back the Req field in the response
+              using a TRANSACTION_TRANSMIT_COUNTER attribute.
+            </t>
+            <t>
+              If the server is stateless or does not want to remember
+              the transaction ID then it would populate value 0 for
+              the Resp field in TRANSACTION_TRANSMIT_COUNTER attribute
+              sent in the response. If the server is state-full then it
+              populates the Resp field with the number of responses it
+              has sent for the STUN request.
+            </t>
+          </list>
+        </t>
+        <t>
+          A client that receives a STUN response with a
+          TRANSACTION_TRANSMIT_COUNTER can check the values in the Req
+          field to accurately calculate the RTT if retransmits are
+          occurring. If the server sending the STUN response is
+          stateless the value of the Resp field will always be 0. If
+          the server keeps state of the numbers of STUN request with
+          that same transaction id the value will reflect how many
+          packets the server have seen. This gives the client a hint
+          of which direction loss occurred. See section <xref
+          target="example_operation"/> for more details.
+        </t>
+      </section>
+
+      <section anchor="example_operation" title="Example Operation">
+        <t>
+          Example operation, when a server is state-full, is described
+          in <xref target="Figure3"></xref>. In the first case, all
+          the requests and responses are received correctly. In the
+          upstream loss case, the first request is lost, but the
+          second one is received correctly, the client on receiving
+          the response notes that while 2 requests were sent, only one
+          was received by the server, also the server realizes that
+          the value in the Req field does not match the number of
+          received requests, therefore 1 request was lost. This may
+          also occur at startup in the presence firewalls or NATs that
+          block unsolicited incoming traffic. In the downstream loss
+          case, the responses get lost, client expecting multiple
+          responses, notes that while the server responded to 3
+          requests but only 1 response was received. In the both loss
+          case, requests and responses get lost in tandem, the server
+          notes one request packet was not received, while the client
+          expecting 3 responses received only one, it notes that one
+          request and response packets were lost.
+        </t>
+        <t>
+          <figure anchor="Figure3"
+            title="Retransmit Operation between client and Server">
+            <artwork align="left"><![CDATA[
+|     Normal    |  Upstream loss | Downstream loss |     Both loss |
+| Client Server |  Client Server |  Client  Server | Client Server |
+|+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-|
+| 1        1,1  |  1        x    |  1         1,1  |  1        x   |
+|   1,1         |                |    x            |               |
+|               |  2        2,1  |  2         2,2  |  2        2,1 |
+|               |    2,1         |    x            |    x          |
+|               |                |  3         3,3  |  3        3,2 |
+|               |                |    3,3          |    3,2        |
+          ]]>
+            </artwork>
+        </figure></t>
+
+        <t>
+          Another example could be the client sends two requests but
+          the second request arrives at the server before the first
+          request because of out of order delivery. In this case, the
+          state-full server populates value 1 for the Resp field
+          in TRANSACTION_TRANSMIT_COUNTER attribute sent in response
+          to the second request and value 2 for the Resp field
+          in TRANSACTION_TRANSMIT_COUNTER attribute sent in response
+          to the first request.
+        </t>
+        <t>
+          The intention with this mechanism is not to carry out
+          comprehensive and accurate measurements regarding in what
+          direction loss is occurring. In some cases, it might not be
+          able to distinguish the difference between downstream loss and
+          packet reordering.
+        </t>
+      </section>
+    </section>
+
+    <section anchor="usecases" title="Use Cases">
+      <t>
+        The STUN attribute defined in this document can be used by,
+        but are not limited to, applications in the following
+        scenarios:
+      </t>
+      <t>
+        <list style="symbols">
+          <t>
+            When an endpoint has multiple interfaces (for example 3G,
+            4G, WiFi, VPN, etc.), an ICE agent can choose the
+            interfaces for application data according to the path
+            characteristics. After STUN responses to STUN checks are
+            received, the ICE agent using regular nomination can sort
+            the ICE candidate pairs according to the path
+            characteristics (loss and RTT) discovered using STUN. The
+            controlling agent can then assign the highest priority to
+            candidate pair which best fulfills the desired path
+            characteristics. However, it should be noted that the path
+            capacity or throughput is not determined by these STUN
+            checks. If an endpoint needs to pick paths based on
+            capacity, it would have to send application data on those
+            paths.
+          </t>
+          <t>
+            When a host has multiple interfaces available an <xref
+            target="I-D.ietf-avtcore-mprtp">MPRTP</xref> application
+            can choose the interfaces for the corresponding subflows
+            according to the path characteristics (loss and RTT)
+            discovered using STUN. For example, the scheduling
+            algorithm described in <xref target="ACM-MPRTP"></xref>
+            uses path capacity, latency, and loss rate for choosing
+            the most suitable subset of paths.
+          </t>
+          <t>
+            The STUN extension proposed in this document can also be
+            used to choose a TURN server that provides the best user
+            experience (section 3.1 of <xref
+            target="I-D.patil-tram-turn-serv-selection"></xref>).
+          </t>
+        </list>
+      </t>
+    </section>
+
+    <section title="IANA Considerations">
+      <t>[Paragraphs in braces should be removed by the RFC Editor
+      upon publication]</t>
+
+      <t>[The TRANSACTION_TRANSMIT_COUNTER attribute requires that IANA
+      allocate a value in the "STUN attributes Registry" from the
+      comprehension-optional range (0x8000-0xBFFF), to be replaced for
+      TBD-CA throughout this document]</t>
+
+      <t>This document defines the TRANSACTION_TRANSMIT_COUNTER STUN attribute,
+      described in <xref target="alg_over"></xref>. IANA has allocated
+      the comprehension-optional codepoint TBD-CA for this
+      attribute.</t>
+    </section>
+
+    <section anchor="security" title="Security Considerations">
+      <t>
+        Security considerations discussed in <xref
+        target="RFC5389"></xref> are to be taken into account. STUN
+        requires the 96 bits transaction ID to be uniformly and
+        randomly chosen from the interval 0 .. 2**96-1, and be
+        cryptographically strong. This is good enough security against
+        an off-path attacker. An on-path attacker can either inject a
+        fake response or modify the values in
+        TRANSACTION_TRANSMIT_COUNTER attribute to mislead the client
+        and server. This attack can be mitigated using STUN
+        authentication. As TRANSACTION_TRANSMIT_COUNTER is expected to
+        be used between peers using ICE, and ICE uses STUN short-term
+        credential mechanism the risk of on-path attack influencing
+        the messages is minimal. If TRANSACTION_TRANSMIT_COUNTER is
+        used with Allocate request then STUN long-term credential
+        mechanism or STUN Extension for Third-Party Authorization
+        <xref target="RFC7635"></xref> or (D)TLS connection can be
+        used between the TURN client and the TURN server to prevent
+        attackers from trying to impersonate a TURN server and sending
+        bogus TRANSACTION_TRANSMIT_COUNTER attribute in the Allocate
+        response. However, an attacker could corrupt, remove, or delay
+        an ICE request or response, in order to discourage that path
+        from being used.
+      </t>
+      <t>
+        The information sent in any STUN packet if not encrypted can
+        potentially be observed passively and used for reconnaissance
+        and later attacks.
+      </t>
+    </section>
+
+    <section anchor="ack" title="Acknowledgements">
+      <t>Thanks to Brandon Williams, Simon Perreault, Aijun Wang,
+      Martin Thomson, Oleg Moskalenko, Ram Mohan R and Spencer Dawkins
+      for valuable inputs and comments.</t>
+    </section>
+  </middle>
+
+  <back>
+    <references title="Normative References">
+      <?rfc include="reference.RFC.2119"?>
+      <?rfc include="reference.RFC.5245"?>
+      <?rfc include="reference.RFC.5389"  ?>
+    </references>
+
+    <references title="Informative References">
+      <?rfc include='reference.I-D.patil-tram-turn-serv-selection'?>
+      <?rfc include='reference.I-D.ietf-avtcore-mprtp'?>
+      <?rfc include="reference.RFC.7635"  ?>
+
+      <reference anchor="ACM-MPRTP">
+        <front>
+          <title>MPRTP: multipath considerations for real-time media</title>
+          <author fullname="Varun Singh" initials="V." surname="Singh"></author>
+          <author fullname="Saba Ahsan" initials="S." surname="Ahsan"></author>
+          <author fullname="Joerg Ott" initials="J." surname="Ott"></author>
+          <date year="2013" />
+        </front>
+        <seriesInfo name="in Proc. of ACM Multimedia Systems," value="MMSys" />
+      </reference>
+    </references>
+  </back>
+</rfc>
