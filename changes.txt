@@ -38,5 +38,9 @@ This in addition to adding text throughout that the loss direction
         shoudld be treated as a hint is aimed at resolving SHures
         DISCUSS. 
 
-TODO: Writa bout intention to crude and simple.
 
+Removed use-cases section. Did not provide value and only served to
+limit the possible uses of the mechanism. (The section did serve its
+purpose in a draft explaining in detail why). This creates a backward
+dependecy I do not think is necessary. It is up to ICE, MPRTP etc to
+really decide if this is something they should use.
