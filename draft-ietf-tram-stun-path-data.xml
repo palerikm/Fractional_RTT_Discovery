@@ -10,7 +10,7 @@
 <?rfc inline="yes"?>
 <?rfc compact="yes"?>
 <?rfc subcompact="no"?>
-<rfc category="std" docName="draft-ietf-tram-measurement-rtt-loss-latest"
+<rfc category="std" docName="draft-ietf-tram-stun-path-data-latest"
      ipr="trust200902">
   <front>
     <title abbrev="RTT and Fractional Loss">Measurement of Round Trip
